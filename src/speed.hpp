@@ -45,10 +45,10 @@ class SpeedControl
 	unsigned long last_update_ticks;
 	unsigned long reverse_wait_start_millis;
 
-	unsigned long tick_array[tick_array_size];
-	unsigned int tick_index;
-	unsigned long last_tick_micros;
-	unsigned long tick_counter;
+	volatile unsigned long tick_array[tick_array_size];
+	volatile unsigned long tick_counter;
+	volatile unsigned long last_tick_micros;
+
 	int target_speed;
 
 public:
