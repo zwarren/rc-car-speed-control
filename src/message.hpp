@@ -15,12 +15,14 @@ class SerialMessageHandler
 	SpeedControl *speed_control;
 	SteerControl *steer_control;
 
+	void invalid_param();
 	bool next_int(char **p, int *val_ret);
 	void process();
-	
+
 public:
 	void send_error(const __FlashStringHelper* msg);
 	void send_state(int speed, int steer, int distance);
+	void send_speed_control_status(unsigned long now, int throttle, float speed, unsigned long ticks);
 
 	void init(SpeedControl *speed_control, SteerControl *steer_control);
 	void poll();

@@ -4,27 +4,33 @@
 #include "steer.hpp"
 
 #define STRMATCH(val, lit) (strcmp_P(val, PSTR(lit)) == 0)
+#define SSTR(s) Serial.print(F(s))
+#define SVAL(val) Serial.print(val)
+#define SSEP Serial.print(' ')
+#define SENDL Serial.println()
 
 bool
 SerialMessageHandler::next_int(char **p, int *val_ret)
 {
-	char *s = strsep(p, ",");
+	char *s = strsep(p, " ");
 
 	if (s == NULL || *s == '\0')
-		goto error;
+		return false;
 
 	char *endptr;
-	
+
 	*val_ret = strtol(s, &endptr, 10);
 	
 	if (*endptr != '\0')
-		goto error;
+		return false;
 
 	return true;
+}
 
-error:
+void
+SerialMessageHandler::invalid_param()
+{
 	send_error(F("Invalid param."));
-	return false;
 }
 
 void
@@ -32,8 +38,8 @@ SerialMessageHandler::process()
 {
 	char *p = buf;
 	int val;
-	
-	char *msg_name = strsep(&p, ",");
+
+	char *msg_name = strsep(&p, " ");
 	if (!msg_name)
 	{
 		send_error(F("Invalid message."));
@@ -46,38 +52,75 @@ SerialMessageHandler::process()
 	}
 	else if (STRMATCH(msg_name, "Brake"))
 	{
-		if (!next_int(&p, &val))
+		if (next_int(&p, &val))
 			speed_control->set_brake_force(val);
+		else
+			invalid_param();
 	}
 	else if (STRMATCH(msg_name, "Throttle"))
 	{
-		if (!next_int(&p, &val))
+		if (next_int(&p, &val))
 			speed_control->set_throttle(val);
+		else
+			invalid_param();
 	}
 	else if (STRMATCH(msg_name, "Steer"))
 	{
 		if (next_int(&p, &val))
 			steer_control->set_steer(val);
+		else
+			invalid_param();
 	}
 	else if (STRMATCH(msg_name, "Speed"))
 	{
 		if (next_int(&p, &val))
-			speed_control->set_speed(val);		
+			speed_control->set_speed(val);
+		else
+			invalid_param();
 	}
 	else if (STRMATCH(msg_name, "SetTicksPerMetre"))
 	{
 		if (next_int(&p, &val))
-			speed_control->ticks_per_metre = val;		
+			speed_control->ticks_per_metre = val;
+		else
+			invalid_param();
 	}
 	else if (STRMATCH(msg_name, "SetThrottleOffset"))
 	{
 		if (next_int(&p, &val))
-			speed_control->throttle_offset = val;		
+			speed_control->throttle_offset = val;
+		else
+			invalid_param();
 	}
 	else if (STRMATCH(msg_name, "SetSteerOffset"))
 	{
 		if (next_int(&p, &val))
-			steer_control->steer_offset = val;		
+			steer_control->steer_offset = val;
+		else
+			invalid_param();
+	}
+	else if (STRMATCH(msg_name, "GetSpeedCtrlParams"))
+	{
+		if (next_int(&p, &val))
+		{
+			SSTR("SpeedCtrlParams"); SSEP;
+			SSTR("Token"); SSEP; SVAL(val); SSEP;
+			SSTR("TicksPerMetre"); SSEP; speed_control->ticks_per_metre; SSEP;
+			SSTR("BrakeForce"); SSEP; speed_control->brake_throttle; SSEP;
+			SSTR("ThrottleOffset"); SSEP; speed_control->throttle_offset; SENDL;
+		}
+		else
+			invalid_param();
+	}
+	else if (STRMATCH(msg_name, "Test"))
+	{
+		SSTR("TestResponse");
+		while (next_int(&p, &val))
+		{
+			SSEP;
+			SVAL(val);
+		}
+		SENDL;
 	}
 	else
 	{
@@ -88,20 +131,13 @@ SerialMessageHandler::process()
 void
 SerialMessageHandler::send_error(const __FlashStringHelper* msg)
 {
-	Serial.print(F("Error,"));
-	Serial.println(msg);
+	SSTR("Error"); SSEP; SVAL(msg); SENDL;
 }
 
 void
-send_state(int speed, int steer, int distance)
+SerialMessageHandler::send_speed_control_status(unsigned long now, int throttle, float speed, unsigned long ticks)
 {
-	Serial.print(F("State,"));
-	Serial.print(speed);
-	Serial.print(F(","));
-	Serial.print(steer);
-	Serial.print(F(","));
-	Serial.print(distance);
-	Serial.println();
+	SSTR("SpdCtrl"); SSEP; SVAL(now); SSEP; SVAL(throttle); SSEP; SVAL(speed); SSEP; SVAL(ticks); SENDL;
 }
 
 void
@@ -109,7 +145,7 @@ SerialMessageHandler::init(SpeedControl *speed_control, SteerControl *steer_cont
 {
 	this->speed_control = speed_control;
 	this->steer_control = steer_control;
-	buf_index=0;
+	buf_index = 0;
 }
 
 void	
