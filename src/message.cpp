@@ -27,6 +27,39 @@ SerialMessageHandler::next_int(char **p, int *val_ret)
 	return true;
 }
 
+bool
+SerialMessageHandler::next_float(char **p, float *val_ret)
+{
+	char *s = strsep(p, " ");
+
+	if (s == NULL || *s == '\0')
+		return false;
+
+	char *endptr;
+
+	long int_part;
+	float frac_part = 0;
+
+	int_part = strtol(s, &endptr, 10);
+
+	if (*endptr == '.')
+	{
+		char *frac_str = endptr + 1;
+		size_t frac_len = strlen(frac_str);
+		frac_part = strtol(frac_str, &endptr, 10);
+		if (*endptr != '\0')
+			return false;
+
+		frac_part /= pow(10,frac_len);
+	}
+	else if (*endptr != '\0')
+		return false;
+
+	*val_ret = int_part + frac_part;
+
+	return true;
+}
+
 void
 SerialMessageHandler::invalid_param()
 {
@@ -50,13 +83,6 @@ SerialMessageHandler::process()
 	{
 		speed_control->set_speed(0);
 	}
-	else if (STRMATCH(msg_name, "Brake"))
-	{
-		if (next_int(&p, &val))
-			speed_control->set_brake_force(val);
-		else
-			invalid_param();
-	}
 	else if (STRMATCH(msg_name, "Throttle"))
 	{
 		if (next_int(&p, &val))
@@ -78,6 +104,13 @@ SerialMessageHandler::process()
 		else
 			invalid_param();
 	}
+	else if (STRMATCH(msg_name, "SetBrakeThrottle"))
+	{
+		if (next_int(&p, &val))
+			speed_control->brake_throttle = constrain(val, -90, 0);
+		else
+			invalid_param();
+	}
 	else if (STRMATCH(msg_name, "SetTicksPerMetre"))
 	{
 		if (next_int(&p, &val))
@@ -88,16 +121,32 @@ SerialMessageHandler::process()
 	else if (STRMATCH(msg_name, "SetThrottleOffset"))
 	{
 		if (next_int(&p, &val))
-			speed_control->throttle_offset = val;
+			speed_control->throttle_offset = constrain(val, -90, 90);
 		else
 			invalid_param();
 	}
 	else if (STRMATCH(msg_name, "SetSteerOffset"))
 	{
 		if (next_int(&p, &val))
-			steer_control->steer_offset = val;
+			steer_control->steer_offset = constrain(val, -90, 90);
 		else
 			invalid_param();
+	}
+	else if (STRMATCH(msg_name, "SetPidParams"))
+	{
+		float kp, ki, kd, max_integral;
+		if (next_float(&p, &kp) && next_float(&p, &ki)
+			&& next_float(&p, &kd) && next_float(&p, &max_integral))
+		{
+			speed_control->pid.Kp = kp;
+			speed_control->pid.Ki = ki;
+			speed_control->pid.Kd = kd;
+			speed_control->pid.max_integral = max_integral;
+		}
+		else
+		{
+			invalid_param();
+		}
 	}
 	else if (STRMATCH(msg_name, "GetSpeedCtrlParams"))
 	{

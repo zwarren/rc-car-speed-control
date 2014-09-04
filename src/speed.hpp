@@ -11,14 +11,12 @@ class SerialMessageHandler;
 class SpeedControl
 {
 	/**
-	 * external state transitions (initiated by the user)
+	 * external state transitions (set by the user)
 	 * - STOPPED -> DRIVING or REVERSING
 	 * - DRIVING -> STOPPING
-	 * - REVERSING -> DRIVING or STOPPING
-	 * - REVERSE_WAIT -> DRIVING or STOPPING
+	 * - REVERSING -> STOPPING_REVERSE
 	 *
-	 * internal transitions
-	 * - STOPPING -> REVERSE_WAIT -> REVERSING
+	 * internal transitions (can't be set directly by user)
 	 * - STOPPING -> STOPPED
 	 *
 	 */
@@ -62,29 +60,25 @@ class SpeedControl
 
 	int target_speed;
 
-	PIDController pid;
-
 	void reset_tick_counter();
 
 public:
-	int ticks_per_metre = 16;
+	float ticks_per_metre = 16;
 	int brake_throttle = -40;
 	int reverse_stop_throttle = 5;
 	int throttle_offset = 0;
 
+	PIDController pid;
+
 	void set_throttle(int throttle);
 	int get_throttle();
-	unsigned long average_period(unsigned long *ticks_ret);
 	void set_speed(int requested_speed);
 
-	void set_throttle_offset(int amount) {throttle_offset = constrain(amount, -40, 40);}
-	void set_brake_force(int amount) {brake_throttle = -constrain(amount, 0, 90);}
-	void set_ticks_per_metre(int amount) {ticks_per_metre = constrain(amount, 0, 1000);}
-	
 	void init(SerialMessageHandler *message_handler, Servo *throttle_servo);
 	void poll();
 	void poll_status();
-	void disable();
+	void enable() {set_throttle(0); state = STOPPED;}
+	void disable() {set_throttle(0); state = DISABLED;}
 	void interrupt();
 };
 

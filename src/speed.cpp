@@ -59,13 +59,6 @@ SpeedControl::get_throttle()
 }
 
 void
-SpeedControl::disable()
-{
-	set_throttle(0);
-	state = DISABLED;
-}
-
-void
 SpeedControl::poll()
 {
 	unsigned long now = millis();

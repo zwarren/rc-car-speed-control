@@ -17,6 +17,7 @@ class SerialMessageHandler
 
 	void invalid_param();
 	bool next_int(char **p, int *val_ret);
+	bool next_float(char **p, float *val_ret);
 	void process();
 
 public:
