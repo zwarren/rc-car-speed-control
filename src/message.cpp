@@ -83,21 +83,37 @@ SerialMessageHandler::process()
 	{
 		speed_control->set_speed(0);
 	}
-	else if (STRMATCH(msg_name, "Throttle"))
+	else if (STRMATCH(msg_name, "SetThrottle"))
 	{
 		if (next_int(&p, &val))
 			speed_control->set_throttle(val);
 		else
 			invalid_param();
 	}
-	else if (STRMATCH(msg_name, "Steer"))
+	else if (STRMATCH(msg_name, "GetThrottle"))
+	{
+		SSTR("Throttle"); SSEP; SVAL(speed_control->get_throttle()); SENDL;
+	}
+	else if (STRMATCH(msg_name, "GetThrottleRaw"))
+	{
+		SSTR("ThrottleRaw"); SSEP; SVAL(speed_control->throttle_servo->read()); SENDL;
+	}
+	else if (STRMATCH(msg_name, "SetSteer"))
 	{
 		if (next_int(&p, &val))
 			steer_control->set_steer(val);
 		else
 			invalid_param();
 	}
-	else if (STRMATCH(msg_name, "Speed"))
+	else if (STRMATCH(msg_name, "GetSteer"))
+	{
+		SSTR("Steer"); SSEP; SVAL(steer_control->get_steer()); SENDL;
+	}
+	else if (STRMATCH(msg_name, "GetSteerRaw"))
+	{
+		SSTR("SteerRaw"); SSEP; SVAL(steer_control->steer_servo->read()); SENDL;
+	}
+	else if (STRMATCH(msg_name, "SetSpeed"))
 	{
 		if (next_int(&p, &val))
 			speed_control->set_speed(val);
