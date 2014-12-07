@@ -10,6 +10,7 @@ class SerialMessageHandler;
 
 class SpeedControl
 {
+public:
 	/**
 	 * external state transitions (set by the user)
 	 * - STOPPED -> DRIVING or REVERSING
@@ -62,7 +63,6 @@ class SpeedControl
 
 	void reset_tick_counter();
 
-public:
 	float ticks_per_metre = 16;
 	int brake_throttle = -40;
 	int reverse_stop_throttle = 5;
