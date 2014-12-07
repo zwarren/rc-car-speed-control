@@ -173,7 +173,9 @@ SpeedControl::poll()
 	}
 
 	if (state != prev_state)
+	{
 		SSTR("State change from "); SVAL(prev_state); SSTR(" to "); SVAL(state); SENDL;
+	}
 
 	last_update_ticks = ticks;
 	last_update_millis = now;
@@ -253,6 +255,8 @@ SpeedControl::init(SerialMessageHandler *message_handler, Servo *throttle_servo)
 {
 	this->throttle_servo = throttle_servo;
 	this->message_handler = message_handler;
+	throttle_offset = 0;
+	set_throttle(0);
 	state = DISABLED;
 	last_tick_micros = micros();
 	last_update_millis = millis();
