@@ -6,26 +6,29 @@
 
 class SteerControl
 {
-	Servo *steer_servo;
 public:
+	Servo *steer_servo;
 	int steer_offset;
 
 	void
-	set_steer(int steer)
+	set_steer(int val)
 	{
-		steer = constrain(steer + steer_offset, -90, 90);
-		steer_servo->write(steer + 90);
+		val = constrain(val + steer_offset, -90, 90);
+		steer_servo->write(val + 90);
 	}
 
 	int
 	get_steer()
 	{
-		return steer_servo->read() - 90; // offset?
+		return steer_servo->read() - 90 -  steer_offset;
 	}
 
-	void init(Servo *steer_servo) {this->steer_servo = steer_servo; }
-
+	void init(Servo *steer_servo)
+	{
+		steer_offset = 0;
+		this->steer_servo = steer_servo;
+		set_steer(0);
+	}
 };
-
 
 #endif

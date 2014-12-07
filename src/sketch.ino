@@ -30,16 +30,32 @@ setup()
 	attachInterrupt(0, tick_interrupt, FALLING);
 	pinMode(13, OUTPUT);
 	digitalWrite(13, LOW);
-	throttle_servo.attach(9);
-	steer_servo.attach(10);
-	message_handler.init(&speed_control, &steer_control);
+
+	steer_servo.attach(9);
+	throttle_servo.attach(10);
+
+	steer_control.init(&steer_servo);
 	speed_control.init(&message_handler, &throttle_servo);
+
+	message_handler.init(&speed_control, &steer_control);
+
+	Serial.print("Steer = ");
+	Serial.println(steer_servo.read());
+
+	Serial.print("Steer Offset = ");
+	Serial.println(steer_control.steer_offset);
+
+	Serial.print("Throttle = ");
+	Serial.println(throttle_servo.read());
+
+	Serial.print("Throttle Offset = ");
+	Serial.println(speed_control.throttle_offset);
 }
 
 void
 loop()
 {
-	//message_handler.poll();
+	message_handler.poll();
 	speed_control.poll();
 }
 
