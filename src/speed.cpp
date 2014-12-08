@@ -13,8 +13,30 @@
 #define SENDL Serial.println()
 #define SCOL Serial.print(':')
 
-#define WARN_MSG(s) Serial.print(F(s))
-#define ERROR_MSG(s) Serial.print(F(s))
+#define WARN_MSG(s) Serial.println(F(s))
+#define ERROR_MSG(s) Serial.println(F(s))
+
+static const char *state_names[SpeedControl::NUM_STATES] = {
+	"DISABLED",
+	"ERROR",
+	"STOPPED",
+	"BRAKING",
+	"DRIVING",
+	"REVERSING",
+	"STOPPING_REVERSE"
+};
+
+void
+SpeedControl::change_state(State new_state)
+{
+	SSTR("State change ");
+	SVAL(state_names[state]);
+	SSTR(" to ");
+	SVAL(state_names[new_state]);
+	SENDL;
+
+	state = new_state;
+}
 
 void
 SpeedControl::interrupt()
@@ -45,11 +67,12 @@ SpeedControl::reset_tick_counter()
 // both set_throttle and set_steer take a value between -90 and 90.
 
 void
-SpeedControl::set_throttle(int throttle)
+SpeedControl::set_throttle(int val)
 {
-	throttle = constrain(throttle + throttle_offset, -90, 90);
-	throttle_servo->write(throttle + 90);
-	last_throttle = throttle;
+	last_throttle = val;
+	val = constrain(val + throttle_offset, -90, 90) + 90;
+	SSTR("Set Throttle "); SVAL(val); SENDL;
+	throttle_servo->write(val);
 }
 
 int
@@ -85,8 +108,6 @@ SpeedControl::poll()
 
 	unsigned long period_ticks = ticks - last_update_ticks;
 
-	State prev_state = state;
-
 	int direction = 1;
 
 	switch (state)
@@ -95,17 +116,20 @@ SpeedControl::poll()
 		break;
 
 	case ERROR:
-		set_throttle(0);
+		if (last_throttle != 0)
+			set_throttle(0);
 		break;
 
 	case STOPPED:
 		if (period_ticks != 0)
+		{
 			SSTR("Ticks while stopped!"); SENDL;
+		}
 
 		if (target_speed > 0)
-			state = DRIVING;
+			change_state(DRIVING);
 		else if (target_speed < 0)
-			state = REVERSING;
+			change_state(REVERSING);
 
 		reset_tick_counter();
 		pid.reset();
@@ -119,7 +143,7 @@ SpeedControl::poll()
 			if (no_tick_period >= stop_period_millis)
 			{
 				set_throttle(0);
-				state = STOPPED;
+				change_state(STOPPED);
 			}
 		}
 		else
@@ -134,15 +158,19 @@ SpeedControl::poll()
 		// if period_ticks is 0, just ramp the throttle until something happens.
 		if (period_ticks == 0)
 		{
-			int throttle = last_throttle + throttle_step;
+			int throttle = abs(last_throttle) + throttle_step;
 
 			if (throttle >= 90)
 			{
 				ERROR_MSG("Max throttle but not moving!");
-				state = ERROR;
-				throttle = 0;
+				change_state(ERROR);
+				set_throttle(0);
 			}
-			set_throttle(throttle*direction);
+			else
+			{
+				SSTR("Ramping."); SENDL;
+				set_throttle(throttle*direction);
+			}
 		}
 		else if (ticks < tick_array_size)
 		{
@@ -162,19 +190,17 @@ SpeedControl::poll()
 
 			set_throttle(throttle*direction);
 
-			SSTR("Ticks"); SSEP; SVAL(period_ticks); SSEP;
-			SSTR("P.Avg"); SSEP; SVAL(average_tick_period); SENDL;
+			SSTR("Ticks "); SVAL(period_ticks); SSEP;
+			SSTR("P.Avg "); SVAL(average_tick_period); SSEP;
+			SSTR("Speed "); SVAL(current_speed); SSEP;
+			SSTR("Throttle "); SVAL(throttle); SENDL;
 		}
 		break;
 
 	default:
 		ERROR_MSG("Unknown state.");
-		state = ERROR; 
-	}
-
-	if (state != prev_state)
-	{
-		SSTR("State change from "); SVAL(prev_state); SSTR(" to "); SVAL(state); SENDL;
+		set_throttle(0);
+		change_state(ERROR);
 	}
 
 	last_update_ticks = ticks;
@@ -200,9 +226,9 @@ SpeedControl::set_speed(int requested_speed)
 
 	case STOPPED:
 		if (requested_speed > 0)
-			state = DRIVING;
+			change_state(DRIVING);
 		else if (requested_speed < 0)
-			state = REVERSING;
+			change_state(REVERSING);
 
 		target_speed = requested_speed;
 		reset_tick_counter();
@@ -213,7 +239,7 @@ SpeedControl::set_speed(int requested_speed)
 		if (requested_speed <= 0)
 		{
 			set_throttle(brake_throttle);
-			state = BRAKING;
+			change_state(BRAKING);
 		}
 		break;
 
@@ -221,14 +247,14 @@ SpeedControl::set_speed(int requested_speed)
 		if (requested_speed > 0)
 		{
 			pid.reset();
-			state = DRIVING;
+			change_state(DRIVING);
 		}
 		break;
 
 	case REVERSING:
 		if (requested_speed >= 0)
 		{
-			state = STOPPING_REVERSE;
+			change_state(STOPPING_REVERSE);
 			set_throttle(reverse_stop_throttle);
 		}
 		break;
@@ -237,13 +263,14 @@ SpeedControl::set_speed(int requested_speed)
 		if (requested_speed < 0)
 		{
 			pid.reset();
-			state = REVERSING;
+			change_state(REVERSING);
 		}
 		break;
 
 	default:
 		ERROR_MSG("unknown state");
-		state = ERROR;
+		change_state(ERROR);
+		set_throttle(0);
 		return;
 	}
 
@@ -251,12 +278,12 @@ SpeedControl::set_speed(int requested_speed)
 }
 
 void
-SpeedControl::init(SerialMessageHandler *message_handler, Servo *throttle_servo)
+SpeedControl::init(Servo *throttle_servo)
 {
 	this->throttle_servo = throttle_servo;
-	this->message_handler = message_handler;
 	throttle_offset = 0;
 	set_throttle(0);
+	target_speed = 0;
 	state = DISABLED;
 	last_tick_micros = micros();
 	last_update_millis = millis();
@@ -273,8 +300,6 @@ SpeedControl::poll_status()
 
 	unsigned long ticks;
 	unsigned long p = average_period(&ticks);
-
-	message_handler->send_speed_control_status(now, get_throttle(), p, ticks);
 
 	last_status_millis = now;
 }

@@ -120,6 +120,14 @@ SerialMessageHandler::process()
 		else
 			invalid_param();
 	}
+	else if (STRMATCH(msg_name, "EnableSpeedControl"))
+	{
+		speed_control->enable();
+	}
+	else if (STRMATCH(msg_name, "DisableSpeedControl"))
+	{
+		speed_control->disable();
+	}
 	else if (STRMATCH(msg_name, "SetBrakeThrottle"))
 	{
 		if (next_int(&p, &val))
@@ -148,7 +156,7 @@ SerialMessageHandler::process()
 		else
 			invalid_param();
 	}
-	else if (STRMATCH(msg_name, "SetPidParams"))
+	else if (STRMATCH(msg_name, "SetPIDParams"))
 	{
 		float kp, ki, kd, max_integral;
 		if (next_float(&p, &kp) && next_float(&p, &ki)

@@ -10,7 +10,7 @@ SerialMessageHandler message_handler;
 SpeedControl speed_control;
 SteerControl steer_control;
 
-bool led_on;
+static bool led_on;
 
 static void
 tick_interrupt()
@@ -25,6 +25,8 @@ setup()
 {
 	Serial.begin(115200);
 	Serial.println("RC-Car Speed Control");
+
+	// configure the interrupt pin and the led pin
 	pinMode(2, INPUT);
 	digitalWrite(2, HIGH); // sensor needs the pull-up.
 	attachInterrupt(0, tick_interrupt, FALLING);
@@ -35,7 +37,7 @@ setup()
 	throttle_servo.attach(10);
 
 	steer_control.init(&steer_servo);
-	speed_control.init(&message_handler, &throttle_servo);
+	speed_control.init(&throttle_servo);
 
 	message_handler.init(&speed_control, &steer_control);
 

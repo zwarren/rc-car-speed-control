@@ -1,9 +1,5 @@
-
-#ifdef ARDUINO
-#define CLAMP(val, a, b) constrain(val, a, b)
-#else
-#define CLAMP(v, a, b) ((v) > (a)?(v) < (b)?(v):(b):(a))
-#endif
+#ifndef PID_CONTROL_HPP
+#define PID_CONTROL_HPP
 
 class PIDController
 {
@@ -22,16 +18,16 @@ public:
 
 		if (!first_update)
 		{
-			first_update = false;
 			unsigned long dt = now - last_update;
 			float derivative = (error - last_error)/dt; 
 			output += Ki*integral_error + Kd*derivative;
 			integral_error += error;
-			integral_error = CLAMP(integral_error, -max_integral, max_integral);
+			integral_error = constrain(integral_error, -max_integral, max_integral);
 		}
 
 		last_update = now;
 		last_error = error;
+		first_update = false;
 		return output;
 	}
 
@@ -46,8 +42,11 @@ public:
 	{
 		first_update = true;
 		Kp = 1.0;
-		Ki = 0.0;
+		Ki = 0.01;
 		Kd = 0.0;
+		max_integral = 45;
 	}
 };
+
+#endif /* PID_CONTROL_HPP */
 
