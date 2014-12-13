@@ -40,7 +40,7 @@ public:
 	static const unsigned long minimum_tick_micros = 100;
 	// tick array size must be a power of 2
 	static const unsigned int tick_array_size = 4;
-	static const unsigned int tick_array_mask = tick_array_size - 1;
+	static const unsigned int tick_array_mask = 0x3;
 	static const unsigned long poll_period_millis = 250;
 	static const unsigned long stop_period_millis = 500;
 
@@ -65,7 +65,7 @@ public:
 
 	float ticks_per_metre = 16;
 	int brake_throttle = -20;
-	int reverse_stop_throttle = 5;
+	int reverse_stop_throttle = 0; /* having this non-zero is a bad idea */
 	int throttle_offset = 0;
 
 	PIDController pid;

@@ -3,6 +3,7 @@
 #include "message.hpp"
 #include "speed.hpp"
 #include "steer.hpp"
+#include "utils.hpp"
 
 Servo steer_servo;
 Servo throttle_servo;
@@ -40,18 +41,6 @@ setup()
 	speed_control.init(&throttle_servo);
 
 	message_handler.init(&speed_control, &steer_control);
-
-	Serial.print("Steer = ");
-	Serial.println(steer_servo.read());
-
-	Serial.print("Steer Offset = ");
-	Serial.println(steer_control.steer_offset);
-
-	Serial.print("Throttle = ");
-	Serial.println(throttle_servo.read());
-
-	Serial.print("Throttle Offset = ");
-	Serial.println(speed_control.throttle_offset);
 }
 
 void

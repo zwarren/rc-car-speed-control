@@ -1,20 +1,10 @@
 
+#include <Servo.h>
+#include <util/atomic.h>
 
 #include "speed.hpp"
 #include "message.hpp"
-
-#include <Servo.h>
-
-#include <util/atomic.h>
-
-#define SSTR(s) Serial.print(F(s))
-#define SVAL(val) Serial.print(val)
-#define SSEP Serial.print(' ')
-#define SENDL Serial.println()
-#define SCOL Serial.print(':')
-
-#define WARN_MSG(s) Serial.println(F(s))
-#define ERROR_MSG(s) Serial.println(F(s))
+#include "utils.hpp"
 
 static const char *state_names[SpeedControl::NUM_STATES] = {
 	"DISABLED",
@@ -29,11 +19,7 @@ static const char *state_names[SpeedControl::NUM_STATES] = {
 void
 SpeedControl::change_state(State new_state)
 {
-	SSTR("State change ");
-	SVAL(state_names[state]);
-	SSTR(" to ");
-	SVAL(state_names[new_state]);
-	SENDL;
+	DEBUG_MSG("State %s to %s", state_names[state], state_names[new_state]);
 
 	state = new_state;
 }
@@ -47,7 +33,7 @@ SpeedControl::interrupt()
 	// debounce
 	if (period > minimum_tick_micros)
 	{
-		unsigned int i = (unsigned int)(tick_counter & tick_array_mask);
+		unsigned int i = (unsigned int)(tick_counter) & tick_array_mask;
 		tick_array[i] = period;
 		last_tick_index = i;
 		last_tick_micros = now;
@@ -70,8 +56,7 @@ void
 SpeedControl::set_throttle(int val)
 {
 	last_throttle = val;
-	val = constrain(val + throttle_offset, -90, 90) + 90;
-	SSTR("Set Throttle "); SVAL(val); SENDL;
+	val = constrain(val + throttle_offset, -30, 30) + 90;
 	throttle_servo->write(val);
 }
 
@@ -121,18 +106,19 @@ SpeedControl::poll()
 		break;
 
 	case STOPPED:
-		if (period_ticks != 0)
-		{
-			SSTR("Ticks while stopped!"); SENDL;
+		if (period_ticks != 0) {
+			WARN_MSG("Ticks while stopped!");
+			set_throttle(0);
 		}
+		else {
+			if (target_speed > 0)
+				change_state(DRIVING);
+			else if (target_speed < 0)
+				change_state(REVERSING);
 
-		if (target_speed > 0)
-			change_state(DRIVING);
-		else if (target_speed < 0)
-			change_state(REVERSING);
-
-		reset_tick_counter();
-		pid.reset();
+			reset_tick_counter();
+			pid.reset();
+		}
 		break;
 
 	case BRAKING:
@@ -155,45 +141,43 @@ SpeedControl::poll()
 	case REVERSING:
 		direction = -1;
 	case DRIVING:
-		// if period_ticks is 0, just ramp the throttle until something happens.
-		if (period_ticks == 0)
+		//DEBUG_MSG("A %lu %lu %lu %lu",
+		//	tick_array[0], tick_array[1], tick_array[2], tick_array[3]);
 		{
-			int throttle = abs(last_throttle) + throttle_step;
+			unsigned long current_speed = 0;
+			unsigned long average_tick_period = 0;
 
-			if (throttle >= 90)
+			if (period_ticks >= tick_array_size)
+			{
+				average_tick_period = sum/tick_array_size;
+
+				// period is in uS, so period in seconds is p/1000000
+				// frequency is then 1000000/p
+				// speed is centimetres/second (cm/tick)*ticks/second
+				// given ticks/m, ticks/cm = (ticks/m)/100 and cm/tick = 100/(ticks/m)
+				// so we've got speed cm/s = (100/(ticks/m))*(1000000/p)
+				// simplifying, this is 10000000
+				current_speed =
+					100000000UL/(average_tick_period*ticks_per_metre);
+			}
+
+			long u = pid.update(now, current_speed, abs(target_speed));
+
+			if (u >= 90)
 			{
 				ERROR_MSG("Max throttle but not moving!");
 				change_state(ERROR);
 				set_throttle(0);
+				break;
 			}
-			else
-			{
-				SSTR("Ramping."); SENDL;
-				set_throttle(throttle*direction);
-			}
-		}
-		else if (ticks < tick_array_size)
-		{
-			/* just let the first few ticks go by */
-			SSTR("Ignoring initial ticks."); SENDL;
-		}
-		else
-		{
-			// period is microseconds/tick
-			unsigned long average_tick_period = sum/tick_array_size;
 
-			// speed is metres/second
-			float current_speed = 1.0e6/average_tick_period/ticks_per_metre;
+			int throttle = u*direction;
+			set_throttle(throttle);
 
-			int throttle = pid.update(now, current_speed, target_speed);
-			throttle = constrain(throttle, -90, 90);
-
-			set_throttle(throttle*direction);
-
-			SSTR("Ticks "); SVAL(period_ticks); SSEP;
-			SSTR("P.Avg "); SVAL(average_tick_period); SSEP;
-			SSTR("Speed "); SVAL(current_speed); SSEP;
-			SSTR("Throttle "); SVAL(throttle); SENDL;
+			DEBUG_MSG("C:%3lu P:%6lu S:%3lu E:%3ld I:%3ld U:%2ld T:%2d",
+				period_ticks, average_tick_period, current_speed,
+				long(pid.last_error), long(pid.integral_error),
+				current_speed, u, throttle);
 		}
 		break;
 
@@ -216,12 +200,12 @@ SpeedControl::set_speed(int requested_speed)
 		/* the speed control should be enabled first and then call set_speed()
 		 * don't want enable and surprise
 		 */
-		WARN_MSG("Set speed ignored while speed control disabled.");
+		WARN_MSG("Set speed ignored (disabled)");
 		target_speed = 0;
 		return;
 
 	case ERROR:
-		WARN_MSG("Set speed ignored while speed control error.");
+		WARN_MSG("Set speed ignored (error).");
 		return;
 
 	case STOPPED:
@@ -281,28 +265,18 @@ void
 SpeedControl::init(Servo *throttle_servo)
 {
 	this->throttle_servo = throttle_servo;
-	throttle_offset = 0;
+	throttle_offset = 2; /* fixme: save in eeprom */
 	set_throttle(0);
 	target_speed = 0;
 	state = DISABLED;
 	last_tick_micros = micros();
 	last_update_millis = millis();
 	tick_counter = 0;
+
+	pid.Kp = 0.01;
+	pid.Ki = 0.01;
+	pid.Kd = 0.0;
+	pid.max_integral = 1000;
 }
-
-#if 0
-void
-SpeedControl::poll_status()
-{
-	unsigned long now = millis();
-	if (now - last_status_millis < 1000)
-		return;
-
-	unsigned long ticks;
-	unsigned long p = average_period(&ticks);
-
-	last_status_millis = now;
-}
-#endif
 
 
